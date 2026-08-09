@@ -1,0 +1,699 @@
+RevizorInstructions
+    Type: ApplicationKnowledge
+    Role: AgentInstruction
+    Purpose: AI agent instructions for Revizor — embedded in binary. Call trace_get_instructions at any time. No file access required.
+    Version: 0.2
+
+    StartupProtocol
+        Type: Section
+        Role: AgentInstruction
+        Purpose: Critical protocol — always follow this order when starting a debugging session.
+
+        Step1
+            Type: Text
+            Content: Call trace_ping FIRST. If pong — binary is alive, proceed. If connection refused — binary is not running. Stop. Do not call any other tools.
+
+        Step2
+            Type: Text
+            Content: Call trace_get_instructions if you need the full reference. This document is always available through MCP.
+
+        Step3
+            Type: Text
+            Content: Read logs via trace_search. session_id is optional. This is your primary debugging tool — no session creation required.
+
+        Step4
+            Type: Text
+            Content: Before debugging new code — trace_audit to verify trace points exist. If missing — trace_inject with dry_run: true to preview, then without dry_run to apply.
+
+        Step5
+            Type: Text
+            Content: After applying trace_inject — warn the user to clear __pycache__ and restart if the code runs in Docker or a virtual environment. Python may use old .pyc files and trace events will not appear.
+
+        Step6
+            Type: Text
+            Content: Validate paths after adding — trace_validate_path on every new path. Format: [a-z0-9_.]+, max 120 chars, snake_case.
+
+        Step7
+            Type: Text
+            Content: When done — trace_expire to clean up sessions. trace_shutdown for graceful process stop.
+
+    CoreMethodology
+        Type: Section
+        Role: AgentInstruction
+        Purpose: The Golden Rule — the single most important concept in debugging with Revizor.
+
+        GoldenRule
+            Type: Text
+            Content: Look for .enter without a matching .success — that is the breakage point. Every operation has an .enter at the start and a .success (or .failed) at the end. A missing .success means the operation did not finish — that is your bug.
+
+    HowToReadTraceLogs
+        Type: Section
+        Role: AgentInstruction
+        Purpose: Each entry is an event with path module.component.event.
+
+        Pattern1
+            Type: Text
+            Caption: .enter → .success
+            Content: Operation completed. Move on.
+
+        Pattern2
+            Type: Text
+            Caption: .enter without .success
+            Content: Operation did not finish. THIS IS THE BREAKAGE POINT.
+
+        Pattern3
+            Type: Text
+            Caption: .enter → .failed
+            Content: Operation threw an exception. Read data.reason for the error message.
+
+        Pattern4
+            Type: Text
+            Caption: .decision
+            Content: Branch point. Shows which condition was taken.
+
+        Pattern5
+            Type: Text
+            Caption: Repeated .enter for same path
+            Content: Loop or retry. Check the rate — may indicate a problem.
+
+        Pattern6
+            Type: Text
+            Caption: .success with error field non-null
+            Content: Partial success (best-effort). Operation completed but a sub-step failed — check the error.
+
+    Recipes
+        Type: Section
+        Role: AgentInstruction
+        Purpose: Ready-made debugging recipes for common scenarios.
+
+        Recipe1
+            Type: Section
+            Role: AgentInstruction
+            Caption: Localize a crash in a known flow
+            Content: Search by module name, look for .enter without .success.
+            Command
+                Type: Text
+                Content: curl -s -X POST http://127.0.0.1:9876/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"trace_search","arguments":{"search":"module_name.","lines":20}}}'
+
+        Recipe2
+            Type: Section
+            Role: AgentInstruction
+            Caption: Verify a full end-to-end flow
+            Content: Search for all entry points, count matching .success/.failed pairs.
+            Command
+                Type: Text
+                Content: curl -s -X POST http://127.0.0.1:9876/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"trace_search","arguments":{"search":".enter","path_filter":"module.*","lines":30}}}'
+
+        Recipe3
+            Type: Section
+            Role: AgentInstruction
+            Caption: Three-layer audit
+            Content: 1. trace_search — confirms WHAT happened and WHERE. 2. SQL — gives EXACT values. 3. Source code — explains WHY if the above two do not.
+
+        Recipe4
+            Type: Section
+            Role: AgentInstruction
+            Caption: Before-and-after fix verification
+            Content: Run the SAME trace_search before and after the fix. The difference is objective proof.
+
+        Recipe5
+            Type: Section
+            Role: AgentInstruction
+            Caption: Precise data search
+            Content: Events where field equals value, field exists, aggregate by path, or context around matches.
+            Command
+                Type: Text
+                Content: trace_search '{"search":"","data_filter":"license_ok=false","lines":20}' — events where field equals value. trace_search '{"search":"","data_filter":"license_ok","lines":50}' — events where field exists. trace_search '{"search":"","data_filter":"license_ok=false","count_by":"path"}' — aggregate by path. trace_search '{"search":"order_id","context_lines":5,"lines":20}' — context around matches.
+
+        Recipe6
+            Type: Section
+            Role: AgentInstruction
+            Caption: Compliance check before commit
+            Content: Audit modules for trace import and validate all paths.
+
+    BestPractices
+        Type: Section
+        Role: AgentInstruction
+        Purpose: Eight rules for effective debugging with Revizor.
+
+        Practice1
+            Type: Text
+            Content: Always ping before searching. trace_ping confirms the binary is alive.
+
+        Practice2
+            Type: Text
+            Content: Search without session_id is your default. Sessions are only for time-range filtering (since/until).
+
+        Practice3
+            Type: Text
+            Content: Search by module name as entry point. Do not guess the exact path — search broadly, then drill down.
+
+        Practice4
+            Type: Text
+            Content: Combine trace_search + trace_read. Search finds the area, read gives full context.
+
+        Practice5
+            Type: Text
+            Content: Compare before and after every fix. Same trace_search — difference is proof.
+
+        Practice6
+            Type: Text
+            Content: Use trace_inject --dry-run for code verification. Shows file as unified diff.
+
+        Practice7
+            Type: Text
+            Content: Use trace_audit before every commit. Checks compliance.
+
+        Practice8
+            Type: Text
+            Content: Use trace_validate_path on every new path. No exceptions.
+
+    PingFirstPattern
+        Type: Section
+        Role: AgentInstruction
+        Caption: Use this in scripts
+        Content: Check if Revizor is alive before any operation.
+        Command
+            Type: Text
+            Content: PING=$(curl -s -X POST http://127.0.0.1:9876/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"trace_ping","arguments":{}}}'). If response contains pong — alive, proceed. Otherwise — start with /usr/local/bin/revizor serve.
+
+    LargeDatabases
+        Type: Section
+        Role: AgentInstruction
+        Purpose: On databases with hundreds of thousands of events, trace_start may take tens of seconds. Use trace_search and trace_read without session_id for instant log access — sessions are not required for reading.
+
+    GracefulShutdown
+        Type: Section
+        Role: AgentInstruction
+        Caption: To stop the Revizor process cleanly (flush buffers, close DB)
+        Command
+            Type: Text
+            Content: curl -s -X POST http://127.0.0.1:9876/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"trace_shutdown","arguments":{}}}'
+
+    Tools
+        Type: Section
+        Role: AgentInstruction
+        Purpose: Complete reference of all 35 MCP tools.
+
+        Tool_trace_ping
+            Type: Card
+            Role: ToolReference
+            Id: trace_ping
+            Category: Diagnostic
+            Purpose: Connectivity test with license status. Always call FIRST.
+
+        Tool_trace_get_instructions
+            Type: Card
+            Role: ToolReference
+            Id: trace_get_instructions
+            Category: Diagnostic
+            Purpose: Return this guide. Embedded in binary — no file access needed.
+
+        Tool_trace_license_renew
+            Type: Card
+            Role: ToolReference
+            Id: trace_license_renew
+            Category: Diagnostic
+            Purpose: Manual license renewal (replaces heartbeat).
+
+        Tool_trace_read
+            Type: Card
+            Role: ToolReference
+            Id: trace_read
+            Category: LogReading
+            Purpose: Read last N log lines. session_id optional.
+
+        Tool_trace_search
+            Type: Card
+            Role: ToolReference
+            Id: trace_search
+            Category: LogReading
+            Purpose: Full-text search with path_filter, data_filter, count_by, context_lines. PRIMARY TOOL.
+
+        Tool_trace_config
+            Type: Card
+            Role: ToolReference
+            Id: trace_config
+            Category: LogReading
+            Purpose: Show active trace points for a session.
+
+        Tool_trace_tail
+            Type: Card
+            Role: ToolReference
+            Id: trace_tail
+            Category: LogReading
+            Purpose: Streaming read — new events since last read (cursor-based).
+
+        Tool_trace_start
+            Type: Card
+            Role: ToolReference
+            Id: trace_start
+            Category: Sessions
+            Purpose: Create debug session and enable trace points by preset or path list.
+
+        Tool_trace_enable
+            Type: Card
+            Role: ToolReference
+            Id: trace_enable
+            Category: Sessions
+            Purpose: Enable a single point. Supports glob patterns (auth.**).
+
+        Tool_trace_disable
+            Type: Card
+            Role: ToolReference
+            Id: trace_disable
+            Category: Sessions
+            Purpose: Disable a single point.
+
+        Tool_trace_expire
+            Type: Card
+            Role: ToolReference
+            Id: trace_expire
+            Category: Sessions
+            Purpose: Force-expire a session — disable all points, set expiry to now.
+
+        Tool_trace_kill
+            Type: Card
+            Role: ToolReference
+            Id: trace_kill
+            Category: Sessions
+            Purpose: Kill one or all active sessions with cleanup.
+
+        Tool_trace_validate_path
+            Type: Card
+            Role: ToolReference
+            Id: trace_validate_path
+            Category: Stats
+            Purpose: Validate path format ([a-z0-9_.]+, max 120 chars).
+
+        Tool_trace_why
+            Type: Card
+            Role: ToolReference
+            Id: trace_why
+            Category: Stats
+            Purpose: Explain why a point is enabled/disabled — checks all glob rules.
+
+        Tool_trace_list_sessions
+            Type: Card
+            Role: ToolReference
+            Id: trace_list_sessions
+            Category: Stats
+            Purpose: List all active sessions.
+
+        Tool_trace_presets_list
+            Type: Card
+            Role: ToolReference
+            Id: trace_presets_list
+            Category: Stats
+            Purpose: List available presets (from DB, fallback to YAML).
+
+        Tool_trace_preset_set
+            Type: Card
+            Role: ToolReference
+            Id: trace_preset_set
+            Category: Stats
+            Purpose: Create or update a preset in the database. Supports ! excludes.
+
+        Tool_trace_stats
+            Type: Card
+            Role: ToolReference
+            Id: trace_stats
+            Category: Stats
+            Purpose: Session metrics — total events, unique paths, last event time.
+
+        Tool_trace_list_points
+            Type: Card
+            Role: ToolReference
+            Id: trace_list_points
+            Category: Analysis
+            Purpose: All known trace paths, grouped by module.
+
+        Tool_trace_verify_coverage
+            Type: Card
+            Role: ToolReference
+            Id: trace_verify_coverage
+            Category: Analysis
+            Purpose: Check chain integrity — each .enter must have .success/.failed.
+
+        Tool_trace_diff
+            Type: Card
+            Role: ToolReference
+            Id: trace_diff
+            Category: Analysis
+            Purpose: Compare two sessions — which trace paths differ.
+
+        Tool_trace_cost
+            Type: Card
+            Role: ToolReference
+            Id: trace_cost
+            Category: Generation
+            Purpose: Historical frequency of a trace point (events/minute).
+
+        Tool_trace_generate_test
+            Type: Card
+            Role: ToolReference
+            Id: trace_generate_test
+            Category: Generation
+            Purpose: Generate a pytest test from the event chain of a request_id.
+
+        Tool_trace_suggest_coverage
+            Type: Card
+            Role: ToolReference
+            Id: trace_suggest_coverage
+            Category: Generation
+            Purpose: Compare registered paths against expected .enter/.success/.failed pattern.
+
+        Tool_trace_inject
+            Type: Card
+            Role: ToolReference
+            Id: trace_inject
+            Category: Instrumentation
+            Purpose: Insert trace() calls into Python/TypeScript. dry_run, .bak.
+
+        Tool_trace_remove
+            Type: Card
+            Role: ToolReference
+            Id: trace_remove
+            Category: Instrumentation
+            Purpose: Remove trace() calls (reverse of trace_inject).
+
+        Tool_trace_targets
+            Type: Card
+            Role: ToolReference
+            Id: trace_targets
+            Category: Instrumentation
+            Purpose: Scan filesystem to prioritize files for injection (P1–P5).
+
+        Tool_trace_audit
+            Type: Card
+            Role: ToolReference
+            Id: trace_audit
+            Category: Instrumentation
+            Purpose: Audit modules for compliance. Use before commit.
+
+        Tool_trace_session_summary
+            Type: Card
+            Role: ToolReference
+            Id: trace_session_summary
+            Category: Orchestrator
+            Purpose: Session overview — events, unique paths, last event, status.
+
+        Tool_trace_orchestrator_events
+            Type: Card
+            Role: ToolReference
+            Id: trace_orchestrator_events
+            Category: Orchestrator
+            Purpose: Timeline of events for an orchestrator task (filter by task_id).
+
+        Tool_trace_shutdown
+            Type: Card
+            Role: ToolReference
+            Id: trace_shutdown
+            Category: Process
+            Purpose: Graceful stop — flush buffers, close DB, exit.
+
+        Tool_trace_webhook_list
+            Type: Card
+            Role: ToolReference
+            Id: trace_webhook_list
+            Category: Webhook
+            Purpose: List registered webhooks and delivery status.
+
+        Tool_trace_webhook_test
+            Type: Card
+            Role: ToolReference
+            Id: trace_webhook_test
+            Category: Webhook
+            Purpose: Test ping to a specific webhook.
+
+        Tool_trace_update_check
+            Type: Card
+            Role: ToolReference
+            Id: trace_update_check
+            Category: Diagnostic
+            Purpose: Check for Revizor updates (manual + automatic at startup).
+
+    SDK
+        Type: Section
+        Role: AgentInstruction
+        Purpose: How users send trace events — via SDK or trace_inject.
+
+        Python
+            Type: Section
+            Role: AgentInstruction
+            Caption: Python SDK
+            Command
+                Type: Text
+                Content: from revizor_sdk import configure, trace, trace_start
+                Content: configure(endpoint="http://localhost:9876")
+                Content: trace("my_module.my_function.enter", {"key": "value"})
+                Content: end = trace_start("my_module.operation") ... end({"result": "ok"})
+
+        TypeScript
+            Type: Section
+            Role: AgentInstruction
+            Caption: TypeScript SDK
+            Command
+                Type: Text
+                Content: import { initTrace, trace, traceStart } from '@ais-platform/revizor-sdk'
+                Content: initTrace({ apiBaseUrl: 'http://localhost:9876' })
+                Content: trace('my_module.my_function.enter', { key: 'value' })
+                Content: const end = traceStart('my_module.operation') ... end({ result: 'ok' })
+
+        SDKBehavior
+            Type: Section
+            Role: AgentInstruction
+            Caption: SDK behavior
+            Text
+                Content: Fire-and-forget — trace() never waits for server response
+            Text
+                Content: Never-throw — exceptions are swallowed, your app never crashes because of tracing
+            Text
+                Content: Zero-overhead when disabled — if a point is off, trace() returns instantly
+            Text
+                Content: Client-side sanitization — passwords, tokens, emails are masked before sending
+            Text
+                Content: Batching — events are queued and sent in batches (every 100ms or 50 events)
+
+            DisableSDK
+                Type: Section
+                Role: AgentInstruction
+                Caption: Disable SDK to prevent console noise
+                Content: TypeScript — initTrace({ apiBaseUrl: '' }) disables all tracing. Python — configure(enabled=False). Always disable in environments where Revizor is not running.
+
+    TraceInject
+        Type: Section
+        Role: AgentInstruction
+        Purpose: trace_inject — automatic insertion of trace() calls. Dry-run first, then apply.
+
+        Text
+            Content: trace_inject adds import trace, inserts .enter at function start, .success before each return, .failed before each raise/throw. Module name auto-detected from path. Language auto-detected from extension. Always preview with dry_run: true first.
+
+        PythonSpecifics
+            Type: Section
+            Role: AgentInstruction
+            Content: One-liner functions (def f(x): return expr) are automatically split into multi-line. Nested functions, class methods, and async functions supported.
+
+        TypeScriptSpecifics
+            Type: Section
+            Role: AgentInstruction
+            Content: PascalCase component names are auto-converted to snake_case in trace paths. export function NavMenu() → trace path nav_menu.enter.
+
+        AfterApply
+            Type: Section
+            Role: AgentInstruction
+            Caption: After applying trace_inject
+            Content: If the injected code runs in Docker or a virtual environment — clear Python bytecode cache (__pycache__ directories and .pyc files) and restart the process. Python may continue using old bytecode, making trace events invisible. The binary warns about this after each successful inject.
+
+    TraceRemove
+        Type: Section
+        Role: AgentInstruction
+        Purpose: trace_remove — reverse of trace_inject. Removes all previously injected trace() calls. Always preview with dry_run: true first.
+
+    Presets
+        Type: Section
+        Role: AgentInstruction
+        Purpose: Presets are ready-made sets of trace paths for common debugging scenarios. List with trace_presets_list, pass preset name to trace_start.
+
+    Streaming
+        Type: Section
+        Role: AgentInstruction
+        Purpose: trace_tail streams new events as they arrive. Cursor-based — first call returns last N events, subsequent calls return new events since last call.
+
+    SessionComparison
+        Type: Section
+        Role: AgentInstruction
+        Purpose: trace_diff compares two debugging sessions. Useful after a fix — session A = broken run, session B = fixed run.
+
+    TestGeneration
+        Type: Section
+        Role: AgentInstruction
+        Purpose: trace_generate_test generates a pytest test from a real request's event chain. Pass request_id from trace events.
+
+    OrchestratorEvents
+        Type: Section
+        Role: AgentInstruction
+        Purpose: trace_orchestrator_events shows timeline of events for an orchestrator task. Filter by task_id.
+
+    Webhooks
+        Type: Section
+        Role: AgentInstruction
+        Purpose: Revizor can notify external systems when specific trace events occur. Configure in revizor.yaml. Delivery is async with 3 retries at 5-second intervals.
+
+    Updates
+        Type: Section
+        Role: AgentInstruction
+        Purpose: trace_update_check — manual check for Revizor updates. Binary also checks automatically at startup.
+
+    AccessMethods
+        Type: Section
+        Role: AgentInstruction
+        Purpose: Four ways to access Revizor tools.
+
+        Method1
+            Type: Section
+            Role: AgentInstruction
+            Caption: MCP Direct (Claude Code, Gemini, Cursor)
+            Content: Binary registered in MCP host config — exposes tools natively.
+
+        Method2
+            Type: Section
+            Role: AgentInstruction
+            Caption: HTTP JSON-RPC (curl, scripts, CI/CD)
+            Content: Binary runs as revizor serve on port 9876. All 35 tools via POST /mcp. Most universal method.
+
+        Method3
+            Type: Section
+            Role: AgentInstruction
+            Caption: CLI Wrapper (AI agents WITHOUT tool_calls — DeepSeek, local models)
+            Content: python3 modules/mcp_client_cli_0_1_0/mcp_client_cli_0_1_0.py --server './revizor --mcp' --tool trace_search --args '{"search":"elevation","lines":50}'. Only works with --mcp (stdio) mode, NOT revizor serve.
+
+        Method4
+            Type: Section
+            Role: AgentInstruction
+            Caption: Prompt Adapter (LLMs without ANY tool/function calling)
+            Content: For models that cannot call tools at all. Adapter converts Revizor tools into text instructions. LLM outputs <revizor><tool>trace_ping</tool></revizor> — adapter executes and injects result back. Least efficient, last resort.
+
+    Docker
+        Type: Section
+        Role: AgentInstruction
+        Purpose: If application runs in Docker but Revizor is on host — bind to 0.0.0.0 in revizor.yaml, pass REVIZOR_URL=http://host.docker.internal:9876 to container, create session at startup and pass REVIZOR_SESSION_ID.
+
+    Licensing
+        Type: Section
+        Role: AgentInstruction
+        Purpose: License tiers, limits, and troubleshooting.
+
+        TierComparison
+            Type: Section
+            Role: AgentInstruction
+            Caption: Tier Comparison
+
+            Community
+                Type: Card
+                Role: PricingCard
+                Caption: Community (no key)
+                Sessions: 1
+                EventsPerDay: 100
+                Machines: 1
+                Tools: Basic (3)
+                Storage: SQLite
+
+            Trial
+                Type: Card
+                Role: PricingCard
+                Caption: Trial
+                Sessions: unlimited
+                EventsPerDay: unlimited
+                Machines: 3
+                Tools: Full
+                Storage: SQLite
+
+            Indie
+                Type: Card
+                Role: PricingCard
+                Caption: Indie
+                Sessions: 5
+                EventsPerDay: 10,000
+                Machines: 3
+                Tools: Full
+                Storage: SQLite
+
+            Pro
+                Type: Card
+                Role: PricingCard
+                Caption: Pro
+                Sessions: 10
+                EventsPerDay: 100,000
+                Machines: 10
+                Tools: Full
+                Storage: PostgreSQL
+
+            Enterprise
+                Type: Card
+                Role: PricingCard
+                Caption: Enterprise
+                Sessions: unlimited
+                EventsPerDay: unlimited
+                Machines: unlimited
+                Tools: Full
+                Storage: PostgreSQL
+
+            Privileged
+                Type: Card
+                Role: PricingCard
+                Caption: Privileged
+                Sessions: unlimited
+                EventsPerDay: unlimited
+                Machines: Custom
+                Tools: Full
+                Storage: PostgreSQL
+
+        KeyRules
+            Type: Section
+            Role: AgentInstruction
+            Caption: Key Rules
+
+            Rule
+                Type: Text
+                Content: Sunday Unlimited — all tiers get unlimited usage every Sunday (no session/event limits).
+
+            Rule
+                Type: Text
+                Content: Community mode activates automatically when no license key is provided or the key is invalid.
+
+            Rule
+                Type: Text
+                Content: PostgreSQL requires postgres feature in the license key + storage.type: postgres in revizor.yaml.
+
+            Rule
+                Type: Text
+                Content: Max Version — perpetual licenses (exp=-1) may have max_ver. Binary version must not exceed it.
+
+            Rule
+                Type: Text
+                Content: Activation — first launch with a license key registers the machine. trace_license_renew sends heartbeats.
+
+            Rule
+                Type: Text
+                Content: Enterprise offline — Enterprise licenses work without activation or heartbeats.
+
+        Troubleshooting
+            Type: Section
+            Role: AgentInstruction
+            Caption: When the user hits a limit
+
+            Symptom1
+                Type: Text
+                Caption: trace_start fails
+                Content: Too many active sessions. Fix — trace_kill old sessions, or upgrade tier.
+
+            Symptom2
+                Type: Text
+                Caption: Events not appearing
+                Content: Daily event limit reached. Fix — wait until next day (or Sunday), or upgrade tier.
+
+            Symptom3
+                Type: Text
+                Caption: Tools return errors
+                Content: Community mode (3 tools only). Fix — provide a license key.

@@ -1,0 +1,92 @@
+# Revizor Configuration Example
+# Скопируйте в revizor.yaml и настройте под себя
+
+server:
+  host: "127.0.0.1"
+  port: 9876
+  # read_timeout_sec: 10       # HTTP read timeout (default: 10)
+  # write_timeout_sec: 10      # HTTP write timeout (default: 10)
+  license_server_url: ""       # URL сервера лицензирования (по умолчанию https://ais-platform.dev)
+  license_public_key: ""       # публичный Ed25519-ключ для проверки подписи лицензий (или REVIZOR_LICENSE_PUBLIC_KEY в env)
+
+storage:
+  type: sqlite                 # sqlite | postgres
+  sqlite_path: "./revizor.db"
+  # postgres_url: ""           # URL PostgreSQL (если type=postgres)
+
+security:
+  api_key: ""                  # если задан — /config и /session требуют ключ
+  # pii_sanitization: true     # санитизация PII (default: true)
+  rate_limit:
+    log_per_sec: 100
+    config_per_sec: 10
+
+session:
+  default_ttl_hours: 168       # 7 дней
+  # max_per_user: 10           # максимум сессий на пользователя
+  # auto_expire_check: true    # авто-экспайр истекших сессий
+
+logging:
+  level: info                  # debug | info | warn | error
+  format: text                 # text | json
+  # output: stdout             # stdout | stderr | file:path
+
+presets:
+  debug_elevation:
+    description: "Отладка elevation в админку"
+    paths:
+      - "elevation.**"
+      - "auth.callback.*"
+      - "account.elevation.*"
+      - "!auth.callback.normal_auth"
+  debug_auth:
+    description: "Отладка OAuth авторизации"
+    paths:
+      - "auth.callback.**"
+      - "auth.oauth.**"
+      - "account.fetch_profile.*"
+  debug_rbac:
+    description: "Отладка прав доступа"
+    paths:
+      - "rbac.*"
+      - "admin.me.*"
+      - "elevation.start.*"
+
+integrations:
+#   foreman:
+#     enabled: false
+#     webhook_url: "http://localhost:9800/webhook"
+
+  # === Webhook-уведомления (REV-W-001) ===
+  # Ревизор может уведомлять внешние системы о событиях трассировки.
+  # Используйте для инвалидации устаревших вердиктов в AIS Surveyor.
+  webhooks:
+    # - id: "surveyor-invalidation"
+    #   url: "http://localhost:9877/api/v1/revizor-events"
+    #   path_filter: "auth.**,payment.**,migration.**"
+    #   enabled: true
+
+# license_key: ""              # лицензионный ключ (или REVIZOR_LICENSE_KEY в env)
+
+# === Настройки структуры проекта ===
+# По умолчанию Ревизор ожидает структуру modules/<name>_<version>/
+# (AIS Platform). Для других проектов — настройте эту секцию.
+# project:
+#   source_root: ""             # корень исходников относительно CWD
+#                               # "" → "modules" (AIS-дефолт)
+#                               # "src", "lib", "packages" — для других проектов
+#   excluded_dirs:              # директории, исключаемые из targets/audit
+#     - "my_revizor_module"
+#   trace_imports:              # формы импорта trace (вставка + аудит)
+#     python_import_stmt: "from revizor_sdk import trace, trace_start\n"
+#     python_import_pattern: "from revizor_sdk import trace"
+#     typescript_import_stmt: 'import { trace } from "@ais-platform/revizor-sdk";\n'
+#     audit_python_patterns:
+#       - "from revizor_sdk import"
+#     audit_typescript_patterns:
+#       - "@ais-platform/revizor-sdk"
+
+cleanup:
+  log_retention_hours: 168     # 7 дней
+  # file_retention_hours: 72   # время хранения файлов (default: 72)
+  cleanup_interval_min: 60

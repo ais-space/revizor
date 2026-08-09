@@ -1,0 +1,15 @@
+# Build artifacts
+revizor
+*.db
+*.bak-*
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+
+# IDE
+.idea/
+.vscode/
