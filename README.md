@@ -1,5 +1,12 @@
 # AIS Revizor — Runtime Trace Engine for AI Coding Agents
 
+> **ARCHIVED.** This project is closed and preserved as-is for history.
+> It grew into Sir Revizor — our closed audit system that finds real defects
+> (independent audit reports are published in our disclosure portfolio).
+> Not to be confused: AIS Revizor (this repo, open trace engine) and
+> Sir Revizor (closed defect-proof system) are different products sharing
+> a name root. No further releases, issues or pull requests are expected here.
+
 **Give your AI coding agent X-Ray vision.**
 
 AIS Revizor is a runtime trace engine that turns execution into causal chains
